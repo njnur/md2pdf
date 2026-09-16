@@ -1,0 +1,94 @@
+MD to PDF — Non-Commercial License
+Copyright (c) 2026 Nurujjaman Nur
+
+All rights reserved, except as expressly granted below.
+
+--------------------------------------------------------------------------------
+1. DEFINITIONS
+--------------------------------------------------------------------------------
+
+"Software" means the MD to PDF software and all files in this repository,
+including source code, documentation, and assets.
+
+"You" (or "Your") means the individual or entity exercising the rights granted
+by this License.
+
+"Non-Commercial" means not primarily intended for or directed toward commercial
+advantage or monetary compensation. Personal use, academic and educational use,
+research, evaluation, and use by non-profit organisations for their non-revenue
+activities are Non-Commercial.
+
+"Commercial Use" means any use that is primarily intended for or directed toward
+commercial advantage or monetary compensation. This includes, without
+limitation: selling, licensing, renting, or sub-licensing the Software; charging
+a fee for access to the Software or its output as a paid service; bundling or
+integrating the Software into a product or service that is sold or monetised;
+and internal use by a for-profit entity as part of revenue-generating operations.
+
+--------------------------------------------------------------------------------
+2. GRANT OF RIGHTS (NON-COMMERCIAL)
+--------------------------------------------------------------------------------
+
+Subject to the terms and conditions of this License, the copyright holder grants
+You a worldwide, royalty-free, non-exclusive, non-transferable license to use,
+copy, modify, and distribute the Software and Your modifications, solely for
+Non-Commercial purposes.
+
+--------------------------------------------------------------------------------
+3. CONDITIONS
+--------------------------------------------------------------------------------
+
+Every copy or substantial portion of the Software that You use, distribute, or
+make available must:
+
+  (a) retain the above copyright notice, this list of conditions, and the
+      disclaimer in Section 6;
+
+  (b) give clear attribution to the original author (njnur) and, where
+      practical, link to the original repository; and
+
+  (c) clearly mark any files You have changed as modified, so that they are not
+      misrepresented as the original Software.
+
+You may not apply any additional or different terms to the Software, and You may
+not sublicense it, except that Your own original modifications may be released by
+You under terms consistent with this License.
+
+--------------------------------------------------------------------------------
+4. COMMERCIAL USE
+--------------------------------------------------------------------------------
+
+Commercial Use is NOT permitted under this License. To obtain a commercial
+license, please contact the copyright holder via https://github.com/njnur to
+arrange separate terms.
+
+--------------------------------------------------------------------------------
+5. TERMINATION
+--------------------------------------------------------------------------------
+
+This License and the rights granted under it terminate automatically if You
+breach any of its terms. Upon termination You must cease all use and distribution
+of the Software. Sections 1, 4, 6, and 7 survive termination. Your rights may be
+reinstated if You cure the breach within 30 days of becoming aware of it.
+
+--------------------------------------------------------------------------------
+6. DISCLAIMER OF WARRANTY
+--------------------------------------------------------------------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+--------------------------------------------------------------------------------
+7. LIMITATION OF LIABILITY
+--------------------------------------------------------------------------------
+
+IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Note: This is a source-available, Non-Commercial license. It is NOT an
+OSI-approved open-source license, because it restricts commercial use.
