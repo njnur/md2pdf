@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+
+<meta name="description" content="Markdown-to-PDF editor with live, print-accurate preview. No build step, no network.">
+<title>MD to PDF</title>
+
+<!-- Inline SVG favicon keeps the tool fully self-contained (no favicon network request). -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='4' fill='%232d5f8b'/%3E%3Cpath d='M7 6h10M7 10h10M7 14h6' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<style>
+/* ==========================================================================
+   Markdown to PDF — stylesheet
+   --------------------------------------------------------------------------
+   Sections:
+     1. Design tokens
+     2. Base & reset
+     3. App shell & top bar
+     4. Settings panel (controls)
+     5. Editor & preview panes
+     6. The document ("#doc") — how rendered Markdown looks on paper
+     7. Responsive layout (screen only)
+     8. Print — must visually match the on-screen sheet
+   ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/* 1. Design tokens                                                           */
+/* -------------------------------------------------------------------------- */
+:root{
+  --bg:#f3f5f7;
+  --panel:#ffffff;
+  --workspace:#dfe4ea;
+  --line:#e4e8ed;
+  --line-firm:#ccd4dd;
+  --text:#1b2430;
+  --muted:#697585;
+  --accent:#2d5f8b;
+  --accent-soft:#eaf1f8;
+  --radius:6px;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --ui-mono:"SF Mono",Consolas,"Liberation Mono",Menlo,monospace;
+  color-scheme:light;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. Base & reset                                                            */
+/* -------------------------------------------------------------------------- */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--ui);font-size:14px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+/* -------------------------------------------------------------------------- */
+/* 3. App shell & top bar                                                     */
+/* -------------------------------------------------------------------------- */
+.app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+.topbar{
+  display:flex;align-items:center;gap:10px;flex:0 0 auto;
+  padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto;min-width:0}
+.brand h1{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.brand .stock{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.btn{
+  background:var(--panel);border:1px solid var(--line-firm);border-radius:var(--radius);
+  padding:7px 12px;cursor:pointer;white-space:nowrap;
+}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;padding:8px 16px}
+.btn-primary:hover{background:#24507a;color:#fff}
+.btn-quiet{background:none;border-color:transparent;color:var(--muted)}
+.btn-quiet:hover{background:var(--bg);color:var(--text);border-color:transparent}
+.btn-quiet[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+
+/* Three-column workspace: settings | editor | preview */
+.main{display:grid;grid-template-columns:272px minmax(240px,1fr) minmax(320px,1.2fr);min-height:0;flex:1 1 auto}
+.main.no-editor{grid-template-columns:272px 1fr}
+.main.no-editor .editor{display:none}
+
+/* -------------------------------------------------------------------------- */
+/* 4. Settings panel (controls)                                               */
+/* -------------------------------------------------------------------------- */
+.settings{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding-bottom:28px}
+.group{border-bottom:1px solid var(--line);padding:14px 16px}
+.group:last-child{border-bottom:0}
+.group h2{margin:0 0 11px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.row:last-child{margin-bottom:0}
+.row label{flex:0 0 80px;font-size:12.5px;color:var(--muted)}
+.row .ctl{flex:1 1 auto;min-width:0}
+.row .val{width:28px;text-align:right;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+select,input[type=number]{
+  width:100%;background:var(--panel);border:1px solid var(--line-firm);
+  border-radius:4px;padding:5px 7px;font-size:13px;
+}
+select{cursor:pointer}
+input[type=color]{width:100%;height:28px;padding:2px;background:var(--panel);border:1px solid var(--line-firm);border-radius:4px;cursor:pointer}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.pair{display:flex;gap:8px}
+.check{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:8px;cursor:pointer}
+.check:last-child{margin-bottom:0}
+.check input{accent-color:var(--accent);width:15px;height:15px}
+
+/* Segmented two-option control (orientation, alignment) */
+.seg{display:flex;border:1px solid var(--line-firm);border-radius:4px;overflow:hidden}
+.seg button{flex:1;background:var(--panel);border:0;padding:5px 4px;font-size:12.5px;cursor:pointer;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line-firm)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:500}
+
+.note{font-size:12px;color:var(--muted);line-height:1.55;margin:11px 0 0}
+.note code{font-family:var(--ui-mono);font-size:11.5px;background:var(--bg);padding:1px 4px;border-radius:3px}
+.note strong{color:var(--text);font-weight:600}
+.support{list-style:none;margin:11px 0 0;padding:0;font-size:12.5px}
+.support li{margin-bottom:8px}
+.support li:last-child{margin-bottom:0}
+.support a{display:inline-flex;align-items:center;gap:8px;color:var(--accent);text-decoration:none}
+.support a:hover{text-decoration:underline}
+.support svg{flex:0 0 auto;width:15px;height:15px;fill:currentColor}
+
+/* -------------------------------------------------------------------------- */
+/* 5. Editor & preview panes                                                  */
+/* -------------------------------------------------------------------------- */
+.editor{display:flex;flex-direction:column;border-right:1px solid var(--line);min-width:0;background:var(--panel)}
+.preview{display:flex;flex-direction:column;min-width:0}
+.pane-bar{
+  display:flex;align-items:center;gap:8px;flex:0 0 auto;min-height:36px;
+  padding:6px 14px;font-size:12.5px;color:var(--muted);
+  background:var(--panel);border-bottom:1px solid var(--line);
+}
+.pane-bar .spacer{margin-left:auto}
+
+#src{
+  flex:1 1 auto;width:100%;border:0;resize:none;padding:16px 18px;background:var(--panel);
+  font-family:var(--ui-mono);font-size:13px;line-height:1.7;tab-size:2;
+}
+#src:focus{outline:none}
+
+/* The workspace holds the scaled paper sheet. */
+.stage{flex:1 1 auto;overflow:auto;background:var(--workspace);padding:26px 24px 60px}
+.shell{margin:0 auto}
+.scaler{transform-origin:top left}
+#sheet{
+  position:relative;background:#fff;color:#1a1a1a;
+  box-shadow:0 1px 2px rgba(16,24,40,.12),0 10px 30px rgba(16,24,40,.12);
+  width:210mm;min-height:297mm;padding:20mm;
+  --doc-body:Georgia,serif;--doc-head:system-ui,sans-serif;--doc-mono:Consolas,monospace;
+  --doc-size:12pt;--doc-lh:1.5;--doc-gap:.55em;--doc-accent:#1a1a1a;--doc-align:left;
+}
+/* Dashed page-break guides drawn over the sheet in the preview. */
+.guide{position:absolute;left:0;right:0;border-top:1px dashed rgba(45,95,139,.5);pointer-events:none}
+.guide span{position:absolute;right:3mm;top:2px;font-family:var(--ui);font-size:9px;color:var(--accent);background:#fff;padding:0 4px}
+
+/* -------------------------------------------------------------------------- */
+/* 6. The document — rendered Markdown as it appears on paper                 */
+/* -------------------------------------------------------------------------- */
+#doc{
+  font-family:var(--doc-body);font-size:var(--doc-size);line-height:var(--doc-lh);
+  text-align:var(--doc-align);-webkit-print-color-adjust:exact;print-color-adjust:exact;
+}
+#doc.hyphenate{hyphens:auto;-webkit-hyphens:auto}
+#doc>*:first-child{margin-top:0}
+#doc p{margin:0 0 var(--doc-gap)}
+#doc h1,#doc h2,#doc h3,#doc h4,#doc h5,#doc h6{
+  font-family:var(--doc-head);color:var(--doc-accent);text-align:left;line-height:1.22;
+  font-weight:600;margin:1.5em 0 .5em;break-after:avoid;page-break-after:avoid;
+}
+#doc h1{font-size:1.9em;margin-top:0;letter-spacing:-.015em}
+#doc h2{font-size:1.4em}
+#doc h3{font-size:1.15em}
+#doc h4{font-size:1em}
+#doc h5,#doc h6{font-size:.92em;color:#555}
+#doc ul,#doc ol{margin:0 0 var(--doc-gap);padding-left:1.5em}
+#doc li{margin-bottom:.22em}
+#doc li>ul,#doc li>ol{margin-top:.22em;margin-bottom:0}
+#doc blockquote{margin:1em 0;padding:.1em 0 .1em 1em;border-left:2px solid var(--doc-accent);color:#3f4650;text-align:left}
+#doc blockquote>*:last-child{margin-bottom:0}
+#doc a{color:var(--doc-accent);text-decoration:underline;text-underline-offset:2px}
+#doc code{font-family:var(--doc-mono);font-size:.86em;background:#f1f2f4;padding:.1em .34em;border-radius:3px}
+#doc pre{
+  font-family:var(--doc-mono);font-size:.82em;line-height:1.5;background:#f6f7f9;
+  border:1px solid #e3e6ea;border-radius:4px;padding:.8em 1em;margin:1em 0;text-align:left;
+  break-inside:avoid;page-break-inside:avoid;white-space:pre-wrap;word-wrap:break-word;
+}
+#doc pre code{background:none;padding:0;font-size:1em}
+#doc table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.92em;break-inside:avoid;page-break-inside:avoid}
+#doc th,#doc td{border:1px solid #d7dbe0;padding:.42em .6em;text-align:left;vertical-align:top}
+#doc th{background:#f2f4f6;font-family:var(--doc-head);font-weight:600}
+#doc hr{border:0;border-top:1px solid #d7dbe0;margin:1.8em 0}
+#doc img{max-width:100%;height:auto}
+#doc .task{font-family:var(--doc-head)}
+#doc .pagebreak{break-before:page;page-break-before:always;height:0;margin:0}
+#doc .toc{border:1px solid #e0e3e8;border-radius:4px;padding:1em 1.4em;margin:0 0 1.6em}
+#doc .toc h2{margin:0 0 .5em;font-size:1.05em}
+#doc .toc ol{list-style:none;padding-left:0;margin:0;font-size:.95em}
+#doc .toc ol ol{padding-left:1.2em}
+#doc .toc li{margin-bottom:.2em}
+#doc .toc a{text-decoration:none;color:inherit}
+#doc p,#doc li,#doc blockquote{orphans:3;widows:3}
+
+/* -------------------------------------------------------------------------- */
+/* 7. Responsive layout (screen only)                                         */
+/* --------------------------------------------------------------------------
+   Scoped to `screen` on purpose: printing evaluates width media features
+   against the *paper* box (an A4 page is ~794px, below this breakpoint), so
+   an unscoped rule here would hijack the print layout and blank the output. */
+.tabs{display:none}
+@media screen and (max-width:900px){
+  .main,.main.no-editor{grid-template-columns:1fr;grid-template-rows:1fr}
+  .settings,.editor{border-right:0}
+  .main>section{display:none}
+  .main[data-tab="settings"] .settings{display:block}
+  .main[data-tab="write"] .editor{display:flex}
+  .main[data-tab="paper"] .preview{display:flex}
+  .main.no-editor .editor{display:none}
+  .tabs{display:flex;flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line)}
+  .tabs button{flex:1;background:none;border:0;padding:11px 4px;cursor:pointer;color:var(--muted);font-size:13px}
+  .tabs button[aria-pressed="true"]{color:var(--accent);box-shadow:inset 0 2px 0 var(--accent);font-weight:600}
+  .brand .stock,.hide-sm{display:none}
+  .stage{padding:16px 10px 40px}
+}
+
+/* -------------------------------------------------------------------------- */
+/* 8. Print — reveal only the sheet and let @page own the geometry           */
+/* -------------------------------------------------------------------------- */
+@media print{
+  .no-print,.settings,.editor,.tabs,.topbar,.pane-bar{display:none !important}
+  html,body{height:auto;background:#fff !important}
+  .app,.main,.main.no-editor,.preview{display:block;height:auto}
+  .stage{display:block;overflow:visible;background:#fff;padding:0}
+  .shell{margin:0;width:auto !important;height:auto !important}
+  .scaler{transform:none !important}
+  #sheet{width:auto !important;min-height:0 !important;padding:0 !important;box-shadow:none !important}
+  .guide{display:none}
+}
+</style>
+
+<style id="pagerules">@page{size:A4 portrait;margin:20mm 20mm}</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1>MD to PDF</h1>
+      <span class="stock" id="stock">A4, 210 × 297 mm</span>
+    </div>
+    <button class="btn btn-quiet hide-sm" id="toggleEditor" aria-pressed="true">Editor</button>
+    <button class="btn" id="openFile">Open</button>
+    <button class="btn hide-sm" id="saveMd">Save .md</button>
+    <button class="btn btn-primary" id="export">Save PDF</button>
+    <input type="file" id="fileInput" accept=".md,.markdown,.mdown,.txt,text/markdown,text/plain" hidden>
+  </header>
+
+  <div class="main" id="main" data-tab="write">
+
+    <section class="settings" aria-label="Document settings">
+      <div class="group">
+        <h2>Paper</h2>
+        <div class="row">
+          <label for="paperSize">Size</label>
+          <div class="ctl"><select id="paperSize"></select></div>
+        </div>
+        <div class="row">
+          <label>Orientation</label>
+          <div class="ctl seg" id="orient">
+            <button type="button" data-v="portrait" aria-pressed="true">Portrait</button>
+            <button type="button" data-v="landscape" aria-pressed="false">Landscape</button>
+          </div>
+        </div>
+        <div class="row">
+          <label for="mx">Margins</label>
+          <div class="ctl pair">
+            <input type="number" id="mx" min="0" max="60" step="1" value="20" title="Left and right, in millimetres">
+            <input type="number" id="my" min="0" max="60" step="1" value="20" title="Top and bottom, in millimetres">
+          </div>
+        </div>
+        <p class="note">Sides, then top and bottom, in mm.</p>
+      </div>
+
+      <div class="group">
+        <h2>Type</h2>
+        <div class="row">
+          <label for="bodyFont">Body</label>
+          <div class="ctl"><select id="bodyFont"></select></div>
+        </div>
+        <div class="row">
+          <label for="headFont">Headings</label>
+          <div class="ctl"><select id="headFont"></select></div>
+        </div>
+        <div class="row">
+          <label for="monoFont">Code</label>
+          <div class="ctl"><select id="monoFont"></select></div>
+        </div>
+        <div class="row">
+          <label for="size">Size</label>
+          <div class="ctl pair">
+            <input type="number" id="size" min="6" max="28" step="0.5" value="12">
+            <select id="unit"><option value="pt">pt</option><option value="px">px</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="lh">Line height</label>
+          <div class="ctl"><input type="range" id="lh" min="1.1" max="2.2" step="0.05" value="1.5"></div>
+          <span class="val" id="lhVal">1.5</span>
+        </div>
+        <div class="row">
+          <label for="gap">Paragraphs</label>
+          <div class="ctl"><input type="range" id="gap" min="0" max="1.6" step="0.05" value="0.55"></div>
+          <span class="val" id="gapVal">.55</span>
+        </div>
+        <div class="row">
+          <label for="accent">Ink</label>
+          <div class="ctl"><input type="color" id="accent" value="#1a1a1a" title="Headings, links and rules"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Layout</h2>
+        <div class="row">
+          <label>Alignment</label>
+          <div class="ctl seg" id="align">
+            <button type="button" data-v="left" aria-pressed="true">Ragged</button>
+            <button type="button" data-v="justify" aria-pressed="false">Justified</button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="hyphen"> Break words across lines</label>
+        <label class="check"><input type="checkbox" id="toc"> Add a contents list</label>
+        <label class="check"><input type="checkbox" id="guides" checked> Show page breaks in preview</label>
+        <p class="note">Start a new page by putting <code>\pagebreak</code></p>
+      </div>
+
+      <div class="group">
+        <h2>Preview</h2>
+        <div class="row">
+          <label for="zoom">Zoom</label>
+          <div class="ctl">
+            <select id="zoom">
+              <option value="fit">Fit width</option>
+              <option value="0.5">50%</option>
+              <option value="0.75">75%</option>
+              <option value="1">100%</option>
+              <option value="1.25">125%</option>
+              <option value="1.5">150%</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Support this tool</h2>
+        <p class="note">It's free, open - and if it helps you, a quick thanks means a lot</p>
+        <ul class="support">
+          <li>
+            <a href="https://github.com/njnur" target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+              Follow me
+            </a>
+          </li>
+          <li>
+            <!-- If the repository has a different name, update this URL. -->
+            <a href="https://github.com/njnur/md2pdf" target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.9 6.9 7.1.6-5.4 4.7 1.6 7L12 18.3 5.8 21.2l1.6-7L2 9.5l7.1-.6z"/></svg>
+              Star this repository
+            </a>
+          </li>
+          <li>
+            <!-- Replace WISE_TAG with your Wise tag, e.g. https://wise.com/pay/me/yourname -->
+            <a href="https://wise.com/pay/me/mdnurujjamann" target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h13v6a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V4zM16 5h2.5a2.5 2.5 0 0 1 0 5H16zM3 18h13v2H3z"/></svg>
+              Buy me a coffee
+            </a>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="editor">
+      <div class="pane-bar">
+        <span>Markdown</span>
+        <span class="spacer"></span>
+        <span id="counts">0 words</span>
+      </div>
+      <textarea id="src" spellcheck="false" aria-label="Markdown source"># A Small Specimen
+
+Everything on this sheet is set with the controls on the left. Change the
+paper, the typeface, the size or the margins and the page reflows the way it
+will print.
+
+## Why the page looks right
+
+Sizes are given in points, the same unit a word processor uses, so 11pt here
+is 11pt on paper. Margins are measured in millimetres from the trim edge and
+handed to the browser as real page margins, which means they repeat on every
+sheet rather than only the first.
+
+&gt; Set the body text in a size and measure a reader can follow for an hour
+&gt; without noticing the type at all.
+
+### What markdown gives you
+
+- Lists, nested where it helps
+  - Like this one
+- **Bold**, *italic*, `inline code`, ~~struck out~~ and [links](https://example.com)
+- [x] Task boxes, ticked
+- [ ] And unticked
+
+1. Numbered steps stay numbered
+2. Even when they wrap onto a second line, which they often do in a narrower
+   measure such as A5
+
+| Stock  | Width  | Height | Usual job           |
+|--------|--------|--------|---------------------|
+| A4     | 210 mm | 297 mm | Letters, reports    |
+| Letter | 216 mm | 279 mm | The same, in the US |
+| A5     | 148 mm | 210 mm | Booklets, zines     |
+
+```
+function measure(mm) {
+  return mm * (96 / 25.4);
+}
+```
+
+\pagebreak
+
+## The second sheet
+
+That page break came from a line reading `\pagebreak`. Headings avoid sitting
+at the foot of a page on their own, tables and code blocks stay whole, and
+single lines are not left stranded at the top or bottom of a sheet.
+
+---
+
+Replace all of this with your own text, or open a `.md` file from the toolbar.
+</textarea>
+    </section>
+
+    <section class="preview">
+      <div class="pane-bar">
+        <span>Preview</span>
+        <span class="spacer"></span>
+        <span id="pages">1 page</span>
+      </div>
+      <div class="stage" id="stage">
+        <div class="shell" id="shell">
+          <div class="scaler" id="scaler">
+            <div id="sheet"><article id="doc"></article></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <button type="button" data-tab="settings" aria-pressed="false">Settings</button>
+    <button type="button" data-tab="write" aria-pressed="true">Write</button>
+    <button type="button" data-tab="paper" aria-pressed="false">Paper</button>
+  </nav>
+</div>
+
+<script>
+
+(function () {
+  "use strict";
+
+  /* ======================================================================== */
+  /* 1. DOM helpers                                                           */
+  /* ======================================================================== */
+
+  /** @param {string} id @returns {HTMLElement} */
+  const $ = (id) => document.getElementById(id);
+
+  /* ======================================================================== */
+  /* 2. Markdown engine                                                       */
+  /* ------------------------------------------------------------------------ */
+
+  const MD = (function () {
+    /** Per-render registry of heading slugs, to de-duplicate anchors. */
+    let slugs = {};
+
+    /** Escape the three HTML-significant characters. */
+    const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+    /** Escape a double-quote for use inside an HTML attribute value. */
+    const attr = (s) => s.replace(/"/g, "&quot;");
+
+    /**
+     * @param {string} url @returns {string}
+     */
+    function safeUrl(url) {
+      const probe = String(url).replace(/[\x00-\x20]+/g, "").toLowerCase();
+      if (/^(?:javascript|vbscript|file):/.test(probe)) return "#";
+      if (/^data:/.test(probe) && !/^data:image\//.test(probe)) return "#";
+      return url;
+    }
+
+    /** Turn heading text into a unique, URL-safe anchor id. */
+    function slug(s) {
+      const base = s.toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-") || "section";
+      slugs[base] = (slugs[base] || 0) + 1;
+      return slugs[base] > 1 ? base + "-" + slugs[base] : base;
+    }
+
+    /**
+     * @param {string} src @returns {string} HTML
+     */
+    function inline(src) {
+      const codes = [];
+      let s = String(src).replace(/(`+)([\s\S]*?)\1/g, (m, t, c) => {
+        codes.push("<code>" + esc(c.replace(/^ (.*) $/, "$1")) + "</code>");
+        return "\u0000" + (codes.length - 1) + "\u0000";
+      });
+      s = esc(s);
+      s = s.replace(/!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"([^"]*)")?\s*\)/g, (m, alt, src2, title) =>
+        '<img src="' + attr(safeUrl(src2)) + '" alt="' + attr(alt) + '"' + (title ? ' title="' + attr(title) + '"' : "") + ">");
+      s = s.replace(/\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"([^"]*)")?\s*\)/g, (m, txt, href, title) =>
+        '<a href="' + attr(safeUrl(href)) + '"' + (title ? ' title="' + attr(title) + '"' : "") + ">" + txt + "</a>");
+      s = s.replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g, '<a href="$1">$1</a>');
+      s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, "<strong>$1</strong>");
+      s = s.replace(/(^|[^\w])__(?=\S)([\s\S]*?\S)__(?!\w)/g, "$1<strong>$2</strong>");
+      s = s.replace(/~~(?=\S)([\s\S]*?\S)~~/g, "<del>$1</del>");
+      s = s.replace(/(^|[^*\w])\*(?=\S)([^*]*?\S)\*(?!\*)/g, "$1<em>$2</em>");
+      s = s.replace(/(^|[^_\w])_(?=\S)([^_]*?\S)_(?!\w)/g, "$1<em>$2</em>");
+      return s.replace(/\u0000(\d+)\u0000/g, (m, i) => codes[i]);
+    }
+
+    /* Block-level line patterns. */
+    const ITEM = /^(\s*)([-*+]|\d{1,9}[.)])\s+([\s\S]*)$/;
+    const FENCE = /^\s{0,3}(`{3,}|~{3,})\s*([\w+#.-]*)\s*$/;
+    const HEAD = /^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
+    const RULE = /^ {0,3}([-*_])[ \t]*(\1[ \t]*){2,}$/;
+    const QUOTE = /^ {0,3}>/;
+    // Matches an HTML-comment page break; the hyphens are escaped (\- matches -)
+    // so the comment open/close byte sequences never appear in this inline script.
+    const BREAK = /^\s*(\\pagebreak|\[\[newpage\]\]|<!\-\-\s*pagebreak\s*\-\->)\s*$/i;
+    const DELIM = /^\s{0,3}\|?[ :|-]*-[ :|-]*\|?\s*$/;
+
+    /** Does a line begin a block that interrupts a paragraph? */
+    function starts(l) {
+      return FENCE.test(l) || HEAD.test(l) || RULE.test(l) || QUOTE.test(l) ||
+             ITEM.test(l) || BREAK.test(l) || /^ {0,3}</.test(l);
+    }
+
+    /** Split a table row into trimmed, unescaped cells. */
+    function cells(row) {
+      return row.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split(/(?<!\\)\|/)
+                .map((c) => c.replace(/\\\|/g, "|").trim());
+    }
+
+    /**
+     * Render one list block (already grouped by the block scanner).
+     * Detects tight vs. loose lists, nested content, and task-box items.
+     */
+    function list(block) {
+      const first = block[0].match(ITEM);
+      const base = first[1].length;
+      const ordered = /\d/.test(first[2]);
+      const items = [];
+      let cur = null, loose = false, blank = false;
+      for (let k = 0; k < block.length; k++) {
+        const l = block[k];
+        if (!l.trim()) { if (cur) cur.lines.push(""); blank = true; continue; }
+        const m = l.match(ITEM);
+        if (m && m[1].length <= base + 1) {
+          if (cur && blank) loose = true;
+          cur = { lines: [m[3]], indent: m[1].length + m[2].length + 1 };
+          items.push(cur);
+        } else if (cur) {
+          cur.lines.push(l.replace(new RegExp("^ {0," + cur.indent + "}"), ""));
+        }
+        blank = false;
+      }
+      const html = items.map((it) => {
+        let inner = blocks(it.lines);
+        if (!loose) inner = inner.replace(/^<p>([\s\S]*?)<\/p>\s*/, "$1");
+        inner = inner.replace(/^(<p>)?\[([ xX])\]\s+/, (m, p, c) =>
+          (p || "") + '<span class="task">' + (c === " " ? "☐" : "☑") + "</span> ");
+        return "<li>" + inner + "</li>";
+      }).join("");
+      if (!ordered) return "<ul>" + html + "</ul>";
+      const n = parseInt(first[2], 10);
+      return "<ol" + (n !== 1 ? ' start="' + n + '"' : "") + ">" + html + "</ol>";
+    }
+
+    /**
+     * Block scanner: consumes lines top-to-bottom, emitting HTML for each
+     * block type. Recurses for blockquote and list-item contents.
+     * @param {string[]} lines @returns {string} HTML
+     */
+    function blocks(lines) {
+      const out = [];
+      let i = 0;
+      while (i < lines.length) {
+        const line = lines[i];
+        if (!line.trim()) { i++; continue; }
+
+        // Fenced code block.
+        const f = line.match(FENCE);
+        if (f) {
+          const buf = [], close = new RegExp("^\\s{0,3}" + f[1][0] + "{" + f[1].length + ",}\\s*$");
+          i++;
+          while (i < lines.length && !close.test(lines[i])) { buf.push(lines[i]); i++; }
+          i++;
+          out.push("<pre><code>" + esc(buf.join("\n")) + "</code></pre>");
+          continue;
+        }
+        // Explicit page break.
+        if (BREAK.test(line)) { out.push('<div class="pagebreak"></div>'); i++; continue; }
+        // ATX heading.
+        const h = line.match(HEAD);
+        if (h) {
+          out.push("<h" + h[1].length + ' id="' + slug(h[2]) + '">' + inline(h[2]) + "</h" + h[1].length + ">");
+          i++; continue;
+        }
+        // Thematic break.
+        if (RULE.test(line)) { out.push("<hr>"); i++; continue; }
+        // Blockquote (recurses).
+        if (QUOTE.test(line)) {
+          const q = [];
+          while (i < lines.length && lines[i].trim() && (QUOTE.test(lines[i]) || q.length)) {
+            q.push(lines[i].replace(/^ {0,3}> ?/, "")); i++;
+          }
+          out.push("<blockquote>" + blocks(q) + "</blockquote>");
+          continue;
+        }
+        // Pipe table (needs a delimiter row directly below the header).
+        if (line.indexOf("|") > -1 && i + 1 < lines.length && DELIM.test(lines[i + 1]) && lines[i + 1].indexOf("-") > -1) {
+          const head = cells(line);
+          const align = cells(lines[i + 1]).map((c) =>
+            /^:.*:$/.test(c) ? "center" : /:$/.test(c) ? "right" : /^:/.test(c) ? "left" : "");
+          i += 2;
+          const body = [];
+          while (i < lines.length && lines[i].trim() && lines[i].indexOf("|") > -1 && !starts(lines[i])) {
+            body.push(cells(lines[i])); i++;
+          }
+          let t = "<table><thead><tr>" + head.map((c, n) =>
+            "<th" + (align[n] ? ' style="text-align:' + align[n] + '"' : "") + ">" + inline(c) + "</th>").join("") + "</tr></thead>";
+          if (body.length) {
+            t += "<tbody>" + body.map((r) =>
+              "<tr>" + head.map((_, n) =>
+                "<td" + (align[n] ? ' style="text-align:' + align[n] + '"' : "") + ">" + inline(r[n] || "") + "</td>").join("") + "</tr>").join("") + "</tbody>";
+          }
+          out.push(t + "</table>");
+          continue;
+        }
+        // List (groups consecutive items of the same kind, then delegates).
+        if (ITEM.test(line)) {
+          const f0 = line.match(ITEM), base0 = f0[1].length, ord0 = /\d/.test(f0[2]);
+          const sameKind = (l) => {
+            const mm = l.match(ITEM);
+            return !mm || mm[1].length > base0 + 1 || /\d/.test(mm[2]) === ord0;
+          };
+          const block = [];
+          while (i < lines.length) {
+            const l2 = lines[i];
+            if (!l2.trim()) {
+              let j = i + 1;
+              while (j < lines.length && !lines[j].trim()) j++;
+              if (j < lines.length && (/^ {2,}\S/.test(lines[j]) || ITEM.test(lines[j])) && sameKind(lines[j])) {
+                block.push(""); i++; continue;
+              }
+              break;
+            }
+            if (!sameKind(l2)) break;
+            if (ITEM.test(l2) || /^ +\S/.test(l2)) { block.push(l2); i++; continue; }
+            break;
+          }
+          out.push(list(block));
+          continue;
+        }
+        // Raw HTML block (passed through untouched).
+        if (/^ {0,3}</.test(line)) {
+          const raw = [];
+          while (i < lines.length && lines[i].trim()) { raw.push(lines[i]); i++; }
+          out.push(raw.join("\n"));
+          continue;
+        }
+        // Paragraph (runs until a blank line or an interrupting block).
+        const p = [];
+        while (i < lines.length && lines[i].trim() && !starts(lines[i])) { p.push(lines[i]); i++; }
+        out.push("<p>" + inline(p.join("\n")).replace(/( {2,}|\\)\n/g, "<br>\n") + "</p>");
+      }
+      return out.join("\n");
+    }
+
+    /**
+     * Convert a Markdown source string to an HTML string.
+     * @param {string} src @returns {string}
+     */
+    return function (src) {
+      slugs = {};
+      return blocks(String(src).replace(/\r\n?/g, "\n").replace(/\t/g, "    ").split("\n"));
+    };
+  })();
+
+  /* ======================================================================== */
+  /* 3. Static data & default state                                           */
+  /* ======================================================================== */
+
+  const PAPERS = [
+    { id: "a4",      name: "A4",          w: 210,   h: 297,   css: "A4" },
+    { id: "letter",  name: "US Letter",   w: 215.9, h: 279.4, css: "letter" },
+    { id: "legal",   name: "US Legal",    w: 215.9, h: 355.6, css: "legal" },
+    { id: "a5",      name: "A5",          w: 148,   h: 210,   css: "A5" },
+    { id: "a3",      name: "A3",          w: 297,   h: 420,   css: "A3" },
+    { id: "b5",      name: "B5",          w: 176,   h: 250,   css: "B5" },
+    { id: "exec",    name: "Executive",   w: 184.1, h: 266.7, css: null },
+    { id: "tabloid", name: "Tabloid",     w: 279.4, h: 431.8, css: null },
+    { id: "pocket",  name: "Pocket book", w: 110,   h: 178,   css: null }
+  ];
+
+  /** Font stacks grouped for the type <optgroup>s. Each entry: [label, stack]. */
+  const FONTS = {
+    "Serif": [
+      ["Georgia", "Georgia,'Nimbus Roman',serif"],
+      ["Palatino", "'Palatino Linotype','Book Antiqua',Palatino,'URW Palladio L',serif"],
+      ["Garamond", "Garamond,'EB Garamond','Apple Garamond','Times New Roman',serif"],
+      ["Cambria", "Cambria,'Hoefler Text',Georgia,serif"],
+      ["Charter", "'Iowan Old Style',Charter,'Bitstream Charter',Georgia,serif"],
+      ["Times", "'Times New Roman',Times,'Liberation Serif',serif"]
+    ],
+    "Sans serif": [
+      ["System UI", "system-ui,-apple-system,'Segoe UI',Roboto,sans-serif"],
+      ["Calibri", "Calibri,Carlito,'Segoe UI',sans-serif"],
+      ["Helvetica", "'Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif"],
+      ["Verdana", "Verdana,Geneva,'DejaVu Sans',sans-serif"],
+      ["Tahoma", "Tahoma,'Segoe UI',Geneva,sans-serif"],
+      ["Optima", "Optima,Candara,'Gill Sans','Trebuchet MS',sans-serif"]
+    ],
+    "Monospace": [
+      ["Consolas", "Consolas,Menlo,'DejaVu Sans Mono',monospace"],
+      ["SF Mono", "'SF Mono','Andale Mono',Consolas,monospace"],
+      ["Courier", "'Courier New',Courier,monospace"]
+    ]
+  };
+
+  /** How long to wait after the last keystroke before re-rendering (ms). */
+  const DEBOUNCE_MS = 140;
+
+  /** localStorage key. Versioned so the shape can change safely later. */
+  const STORAGE_KEY = "md2pdf.local.v1";
+
+  /** All persisted document + UI settings, with their defaults. */
+  const state = {
+    paper: "a4", orient: "portrait", mx: 20, my: 20,
+    bodyFont: FONTS["Serif"][0][1], headFont: FONTS["Sans serif"][0][1], monoFont: FONTS["Monospace"][0][1],
+    size: 12, unit: "pt", lh: 1.5, gap: 0.55, accent: "#1a1a1a",
+    align: "left", hyphen: false, toc: false, guides: true, zoom: "fit",
+    editor: true, text: ""
+  };
+
+  /* ======================================================================== */
+  /* 4. Persistence                                                           */
+  /* ======================================================================== */
+
+  function save() {
+    try {
+      state.text = $("src").value;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* storage unavailable or full — ignore */ }
+  }
+
+  /** Restore previously saved state over the defaults. Never throws. */
+  function restore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+
+      Object.keys(saved).forEach((k) => {
+        if (Object.prototype.hasOwnProperty.call(state, k)) state[k] = saved[k];
+      });
+      if (state.text) $("src").value = state.text;
+    } catch (e) { /* corrupt or unavailable — fall back to defaults */ }
+  }
+
+  /* ======================================================================== */
+  /* 5. Control setup                                                         */
+  /* ======================================================================== */
+
+  function fillFonts(sel, selected) {
+    Object.keys(FONTS).forEach((group) => {
+      const og = document.createElement("optgroup");
+      og.label = group;
+      FONTS[group].forEach((f) => {
+        const o = document.createElement("option");
+        o.value = f[1];
+        o.textContent = f[0];
+        o.style.fontFamily = f[1];
+        if (f[1] === selected) o.selected = true;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+  }
+
+  /** Reflect a value onto a segmented control's aria-pressed states. */
+  function setSeg(id, value) {
+    const kids = $(id).querySelectorAll("button");
+    for (let i = 0; i < kids.length; i++) {
+      kids[i].setAttribute("aria-pressed", String(kids[i].dataset.v === value));
+    }
+  }
+
+  /** Populate every control from `state` (run once, after restore). */
+  function syncControls() {
+    fillFonts($("bodyFont"), state.bodyFont);
+    fillFonts($("headFont"), state.headFont);
+    fillFonts($("monoFont"), state.monoFont);
+    $("paperSize").value = state.paper;
+    $("mx").value = state.mx;
+    $("my").value = state.my;
+    $("size").value = state.size;
+    $("unit").value = state.unit;
+    $("lh").value = state.lh;
+    $("gap").value = state.gap;
+    $("accent").value = state.accent;
+    $("zoom").value = state.zoom;
+    $("hyphen").checked = state.hyphen;
+    $("toc").checked = state.toc;
+    $("guides").checked = state.guides;
+    $("lhVal").textContent = Number(state.lh).toFixed(2).replace(/0$/, "");
+    $("gapVal").textContent = Number(state.gap).toFixed(2).replace(/^0/, "");
+    setSeg("orient", state.orient);
+    setSeg("align", state.align);
+  }
+
+  /* ======================================================================== */
+  /* 6. Geometry helpers                                                      */
+  /* ======================================================================== */
+
+  const pxPerMm = (function () {
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:absolute;visibility:hidden;width:100mm;height:0";
+    document.body.appendChild(probe);
+    const v = probe.getBoundingClientRect().width / 100;
+    document.body.removeChild(probe);
+    return v || (96 / 25.4);
+  })();
+
+  /** The current paper record (defaults to the first entry). */
+  function paper() {
+    return PAPERS.filter((x) => x.id === state.paper)[0] || PAPERS[0];
+  }
+
+  /** Effective width/height in mm for the current orientation, plus a name. */
+  function dims() {
+    const p = paper();
+    return state.orient === "landscape"
+      ? { w: p.h, h: p.w, name: p.name }
+      : { w: p.w, h: p.h, name: p.name };
+  }
+
+  /* ======================================================================== */
+  /* 7. Rendering & layout                                                     */
+  /* ======================================================================== */
+
+  function buildToc(root) {
+    const heads = root.querySelectorAll("h2, h3");
+    if (!heads.length) return;
+    const box = document.createElement("nav");
+    box.className = "toc";
+    const title = document.createElement("h2");
+    title.textContent = "Contents";
+    box.appendChild(title);
+    const list = document.createElement("ol");
+    let sub = null;
+    for (let i = 0; i < heads.length; i++) {
+      const h = heads[i];
+      if (!h.id) h.id = "h-" + i;
+      const li = document.createElement("li"), a = document.createElement("a");
+      a.href = "#" + h.id;
+      a.textContent = h.textContent;
+      li.appendChild(a);
+      if (h.tagName === "H3") {
+        if (!sub) { sub = document.createElement("ol"); (list.lastElementChild || list).appendChild(sub); }
+        sub.appendChild(li);
+      } else {
+        sub = null;
+        list.appendChild(li);
+      }
+    }
+    box.appendChild(list);
+    const first = root.firstElementChild;
+    if (first && first.tagName === "H1") root.insertBefore(box, first.nextSibling);
+    else root.insertBefore(box, first);
+  }
+
+  /** Parse the editor content into the sheet, then re-run layout. */
+  function render() {
+    const doc = $("doc");
+    doc.innerHTML = MD($("src").value);
+    if ($("toc").checked) buildToc(doc);
+    doc.classList.toggle("hyphenate", $("hyphen").checked);
+
+    // Use the first h1 as the document (and PDF file-name) title.
+    const h1 = doc.querySelector("h1");
+    document.title = h1 && h1.textContent.trim() ? h1.textContent.trim() : "Markdown to PDF";
+
+    const words = $("src").value.trim().split(/\s+/).filter(Boolean).length;
+    $("counts").textContent = words + (words === 1 ? " word" : " words");
+    layout();
+  }
+
+  /**
+   * Compose the @page size declaration.
+
+   * @param {{w:number,h:number}} d  Oriented dimensions in mm.
+   * @returns {string} e.g. "A4 landscape" or "279.4mm 431.8mm"
+   */
+  function pageSize(d) {
+    const p = paper();
+    if (p.css) return p.css + " " + (state.orient === "landscape" ? "landscape" : "portrait");
+    return d.w + "mm " + d.h + "mm";
+  }
+
+  function layout() {
+    const d = dims(), sheet = $("sheet");
+
+    // Sheet geometry & type (mirrors the print output).
+    sheet.style.width = d.w + "mm";
+    sheet.style.minHeight = d.h + "mm";
+    sheet.style.padding = state.my + "mm " + state.mx + "mm";
+    sheet.style.setProperty("--doc-body", state.bodyFont);
+    sheet.style.setProperty("--doc-head", state.headFont);
+    sheet.style.setProperty("--doc-mono", state.monoFont);
+    sheet.style.setProperty("--doc-size", state.size + state.unit);
+    sheet.style.setProperty("--doc-lh", state.lh);
+    sheet.style.setProperty("--doc-gap", state.gap + "em");
+    sheet.style.setProperty("--doc-accent", state.accent);
+    sheet.style.setProperty("--doc-align", state.align);
+
+    // Header readout and the live print rule.
+    $("stock").textContent = d.name + ", " + Math.round(d.w) + " × " + Math.round(d.h) + " mm";
+    $("pagerules").textContent =
+      "@page{size:" + pageSize(d) + ";margin:" + state.my + "mm " + state.mx + "mm}";
+
+    // Zoom: fit-to-width, or an explicit factor.
+    const stage = $("stage");
+    let z;
+    if (state.zoom === "fit") {
+      z = Math.min(1, (stage.clientWidth - 48) / (d.w * pxPerMm));
+      if (!isFinite(z) || z <= 0) z = 1;
+    } else {
+      z = parseFloat(state.zoom) || 1;
+    }
+    $("scaler").style.transform = "scale(" + z + ")";
+
+    // Page-break estimation. Content is split at explicit \pagebreak markers,
+    // then each segment is divided by the printable page height.
+    const body = $("doc"), top = body.offsetTop, contentPx = body.offsetHeight;
+    const pagePx = Math.max(1, (d.h - state.my * 2) * pxPerMm);
+
+    const oldGuides = sheet.querySelectorAll(".guide");
+    for (let i = 0; i < oldGuides.length; i++) oldGuides[i].parentNode.removeChild(oldGuides[i]);
+
+    const marks = body.querySelectorAll(".pagebreak"), bounds = [0];
+    for (let m = 0; m < marks.length; m++) {
+      const at = marks[m].offsetTop - top;
+      if (at > 0 && at < contentPx) bounds.push(at);
+    }
+    bounds.push(contentPx);
+
+    let pages = 1;
+    const offsets = [];
+    for (let s = 0; s < bounds.length - 1; s++) {
+      const sheets = Math.max(1, Math.ceil((bounds[s + 1] - bounds[s] - 1) / pagePx));
+      for (let k = 1; k < sheets; k++) offsets.push(bounds[s] + k * pagePx);
+      pages += sheets - 1;
+      if (s < bounds.length - 2) { offsets.push(bounds[s + 1]); pages += 1; }
+    }
+    $("pages").textContent = pages + (pages === 1 ? " page" : " pages") + ", roughly";
+
+    // Draw the dashed guides at every estimated page boundary.
+    if (state.guides) {
+      offsets.sort((a, b) => a - b);
+      for (let g2 = 0; g2 < offsets.length; g2++) {
+        const g = document.createElement("div");
+        g.className = "guide";
+        g.style.top = (top + offsets[g2]) + "px";
+        const lbl = document.createElement("span");
+        lbl.textContent = "page " + (g2 + 2);
+        g.appendChild(lbl);
+        sheet.appendChild(g);
+      }
+    }
+
+    // Size the (unscaled) shell to the scaled sheet so the workspace scrolls right.
+    const box = sheet.getBoundingClientRect();
+    $("shell").style.width = box.width + "px";
+    $("shell").style.height = box.height + "px";
+  }
+
+  /* ======================================================================== */
+  /* 8. Event wiring                                                          */
+  /* ======================================================================== */
+
+  let timer = null;
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(() => { render(); save(); }, DEBOUNCE_MS);
+  }
+
+  /** Bind a control's `input` event to a state property (with optional cast). */
+  function bind(id, prop, cast) {
+    const el = $(id);
+    el.addEventListener("input", () => {
+      const v = el.type === "checkbox" ? el.checked : el.value;
+      state[prop] = cast ? cast(v) : v;
+      render();
+      save();
+    });
+  }
+
+  /** Read a dropped/opened file as text into the editor. */
+  function loadFile(file) {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => { $("src").value = r.result; render(); save(); };
+    r.readAsText(file);
+  }
+
+  function wireEvents() {
+    const src = $("src");
+
+    // Editor: debounced render on input; Tab inserts two spaces.
+    src.addEventListener("input", schedule);
+    src.addEventListener("keydown", (e) => {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const a = src.selectionStart, b = src.selectionEnd;
+        src.value = src.value.slice(0, a) + "  " + src.value.slice(b);
+        src.selectionStart = src.selectionEnd = a + 2;
+        schedule();
+      }
+    });
+
+    // Simple value-bound controls.
+    bind("paperSize", "paper");
+    bind("mx", "mx", Number);
+    bind("my", "my", Number);
+    bind("bodyFont", "bodyFont");
+    bind("headFont", "headFont");
+    bind("monoFont", "monoFont");
+    bind("size", "size", Number);
+    bind("unit", "unit");
+    bind("accent", "accent");
+    bind("hyphen", "hyphen");
+    bind("toc", "toc");
+    bind("guides", "guides");
+    bind("zoom", "zoom");
+
+    // Sliders with a numeric readout.
+    $("lh").addEventListener("input", function () {
+      state.lh = Number(this.value);
+      $("lhVal").textContent = state.lh.toFixed(2).replace(/0$/, "");
+      render(); save();
+    });
+    $("gap").addEventListener("input", function () {
+      state.gap = Number(this.value);
+      $("gapVal").textContent = state.gap.toFixed(2).replace(/^0/, "");
+      render(); save();
+    });
+
+    // Segmented controls (orientation, alignment).
+    ["orient", "align"].forEach((id) => {
+      $(id).addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        state[id] = b.dataset.v;
+        setSeg(id, b.dataset.v);
+        render(); save();
+      });
+    });
+
+    // Show/hide the editor column.
+    const toggleBtn = $("toggleEditor");
+    toggleBtn.addEventListener("click", () => {
+      state.editor = !state.editor;
+      $("main").classList.toggle("no-editor", !state.editor);
+      toggleBtn.setAttribute("aria-pressed", String(state.editor));
+      layout(); save();
+    });
+
+    // Open / read files.
+    const fileInput = $("fileInput");
+    $("openFile").addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      loadFile(fileInput.files && fileInput.files[0]);
+      fileInput.value = "";
+    });
+
+    // Save the raw Markdown as a .md download.
+    $("saveMd").addEventListener("click", () => {
+      const name = (document.title || "document").replace(/[^\w \-]+/g, "").trim() || "document";
+      const blob = new Blob([$("src").value], { type: "text/markdown;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name + ".md";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    });
+
+    // Drag-and-drop a file anywhere onto the window.
+    ["dragover", "drop"].forEach((ev) => {
+      document.addEventListener(ev, (e) => {
+        e.preventDefault();
+        if (ev === "drop" && e.dataTransfer && e.dataTransfer.files[0]) {
+          loadFile(e.dataTransfer.files[0]);
+        }
+      });
+    });
+
+    // Save as PDF: hand off to the browser's print → "Save as PDF".
+    $("export").addEventListener("click", () => window.print());
+    document.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        window.print();
+      }
+    });
+
+    // Small-screen tab switcher.
+    const tabs = $("tabs");
+    tabs.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      $("main").dataset.tab = b.dataset.tab;
+      const kids = tabs.querySelectorAll("button");
+      for (let i = 0; i < kids.length; i++) kids[i].setAttribute("aria-pressed", String(kids[i] === b));
+      layout();
+    });
+
+    // Re-fit on resize; re-layout once webfonts settle (metrics can shift).
+    window.addEventListener("resize", layout);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  }
+
+  /* ======================================================================== */
+  /* 9. Boot                                                                  */
+  /* ======================================================================== */
+
+  PAPERS.forEach((p) => {
+    const o = document.createElement("option");
+    o.value = p.id;
+    o.textContent = p.name;
+    $("paperSize").appendChild(o);
+  });
+
+  restore();
+  syncControls();
+  wireEvents();
+
+  // Apply the persisted editor-visibility before the first paint.
+  $("main").classList.toggle("no-editor", !state.editor);
+  $("toggleEditor").setAttribute("aria-pressed", String(state.editor));
+
+  render();
+})();
+</script>
+</body>
+</html>
